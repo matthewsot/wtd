@@ -144,11 +144,11 @@ fn tasks_to_html(tasks: &Vec<Task>) -> String {
         ("busy", "I will be genuinely busy, e.g., a meeting with others."),
         ("rough", "The nature of the event (e.g., a hike) makes it difficult to preduct the exact start/end times."),
         ("tentative", "This event timing is only tentative."),
-        ("join-me", "This is an open event; if you're interested in attending with me please reach out!"),
+        ("join-me", "This is an open event; if you're interested in joining please reach out!"),
         ("self", "This is scheduled time for me to complete a specific work or personal task; I can usually reschedule such blocks when requested."),
     ]);
 
-    let mut html = "<html><head><meta charset=\"UTF-8\"><title>Calendar</title><link rel=\"stylesheet\" href=\"stylesheet.css\"></link></head><body>".to_string();
+    let mut html = "<html><head><meta charset=\"UTF-8\"><title>Calendar</title><link rel=\"stylesheet\" href=\"calendar_style.css\"></link></head><body>".to_string();
 
     let n_days = 14;
     let start_period = Local::now().date().naive_local();
@@ -338,7 +338,7 @@ fn main() {
                         }
                         current = current.succ();
                     };
-                } else if l.starts_with("- [ ]") {
+                } else if l.starts_with("- [ ]") || l.starts_with("- [X]") {
                     // '- [ ] ...', starts a new task block
                     let date = the_date.expect("No current date parsed yet...");
                     tasks.push(Task {
@@ -355,7 +355,7 @@ fn main() {
                     handle_task_details(l, tasks.last_mut().expect("Unexpected error..."));
                 } else {
                     if l.trim().len() > 0 {
-                        print!("Ignoring line: {}\n", l);
+                        eprint!("Ignoring line: {}\n", l);
                     }
                 }
             }

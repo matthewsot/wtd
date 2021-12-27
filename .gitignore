@@ -2,3 +2,4 @@ target
 .*.sw*
 *.html
 wtd.md
+*.sh
