@@ -1,9 +1,40 @@
-table, th, td {
+/*table, th, td {*/
+table {
+    border-collapse: collapse;
+}
+th, td {
     border: 1px solid black;
     border-collapse: collapse;
+    padding: 0;
+}
+th {
     padding: 3px;
 }
 
-.busy {
-    background-color: gray;
+.has-task {
+    background-color: #aaa;
+}
+.tag-busy {
+    background-color: red;
+}
+.tag-tentative {
+    /* https://www.quackit.com/css/codes/patterns/css_background_stripes.cfm */
+    background-image: repeating-linear-gradient(165deg, #ccc, #ccc 10px, #dbdbdb 10px, #dbdbdb 20px);
+}
+.tag-rough {
+    border-style: dashed;
+    border-width: 2px;
+}
+.tag-join-me {
+    background-color: #2a2;
+}
+td a {
+    display: block;
+    text-decoration: none;
+    color: inherit;
+    padding: 3px;
+}
+
+li:target {
+    background-color: #aeb;
 }

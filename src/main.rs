@@ -4,6 +4,8 @@ use std::path::Path;
 use std::str::FromStr;
 use std::convert::TryInto;
 use std::cmp::Ordering;
+use std::collections::HashSet;
+use std::collections::HashMap;
 use chrono::{Datelike, NaiveDate, NaiveTime, Weekday, Duration, Timelike, Local};
 // use chrono::format::ParseError;
 
@@ -31,7 +33,7 @@ fn parse_day_line(l: &str) -> Weekday {
 }
 
 fn parse_time(s_: &str) -> NaiveTime {
-    let formats = vec!["%H:%M%p", "%H:%M"];
+    let formats = vec!["%l:%M%p", "%H:%M"];
     let mut s = s_.to_string();
     if !s.contains(":") {
         if s.ends_with("M") {
@@ -76,10 +78,6 @@ fn parse_duration(s: &str) -> chrono::Duration {
 }
 
 fn handle_task_details(l: &str, t: &mut Task) {
-    if t.details.len() > 0 {
-        t.details.push(' ');
-    }
-    t.details.push_str(l.trim());
     for tok in l.split(' ') {
         if tok.starts_with("+") {
             let tag = tok.get(1..).expect("Unexpected");
@@ -111,6 +109,11 @@ fn handle_task_details(l: &str, t: &mut Task) {
             } else {
                 panic!("'{}' is not of the form Start+Duration or Start--End\n", timestr);
             }
+        } else {
+            if t.details.len() > 0 {
+                t.details.push(' ');
+            }
+            t.details.push_str(tok.trim());
         }
     }
 }
@@ -130,6 +133,13 @@ fn cmp_tasks(a: &Task, b: &Task) -> Ordering {
 }
 
 fn tasks_to_html(tasks: &Vec<Task>) -> String {
+    let public_tags = HashMap::from([
+        ("busy", "I will be genuinely busy, e.g., a meeting with others."),
+        ("rough", "The nature of the event (e.g., a hike) makes it difficult to preduct the exact start/end times."),
+        ("tentative", "This event timing is only tentative."),
+        ("join-me", "This is an open event; if you're interested in attending with me please reach out!"),
+    ]);
+
     let mut html = "<html><head><title>Calendar</title><link rel=\"stylesheet\" href=\"stylesheet.css\"></link></head><body>".to_string();
 
     let today = Local::now().date().naive_local();
@@ -161,7 +171,8 @@ fn tasks_to_html(tasks: &Vec<Task>) -> String {
         html.push_str("</td>");
         for day_of_week in 0..7 {
             // TODO: Use a smarter data structure for this.
-            let mut any_task = false;
+            let mut cell_tasks = Vec::new();
+            let mut cell_public_tags = HashSet::new();
             for i in week_task_ids.iter() {
                 let task = &tasks[*i];
                 let task_day = task.date.weekday().num_days_from_monday();
@@ -173,15 +184,33 @@ fn tasks_to_html(tasks: &Vec<Task>) -> String {
                 match [task.start_time, task.end_time] {
                     [Some(start), Some(end)] => {
                         if time >= start && time < end {
-                            any_task = true;
-                            break;
+                            cell_tasks.push(i);
+                            for tag in &task.tags {
+                                if public_tags.contains_key(&tag.as_str()) {
+                                    cell_public_tags.insert(tag.to_string());
+                                }
+                            }
                         }
                     }
                     _ => continue
                 }
             }
-            if any_task {
-                html.push_str("<td class=\"busy\"></td>");
+            if cell_tasks.len() > 0 {
+                html.push_str("<td class=\"has-task");
+                for tag in &cell_public_tags {
+                    html.push_str(" tag-");
+                    html.push_str(tag.as_str());
+                }
+                html.push_str("\">");
+                html.push_str("<a href=\"#");
+                html.push_str("task-");
+                html.push_str(cell_tasks.first().expect("").to_string().as_str());
+                html.push_str("\">has-task");
+                for tag in &cell_public_tags {
+                    html.push_str(", ");
+                    html.push_str(tag.as_str());
+                }
+                html.push_str("</a></td>");
             } else {
                 html.push_str("<td></td>");
             }
@@ -193,7 +222,40 @@ fn tasks_to_html(tasks: &Vec<Task>) -> String {
             break;
         }
     }
-    html.push_str("</table></body></html>");
+    html.push_str("</table><ul>");
+    for i in week_task_ids.iter() {
+        let task = &tasks[*i];
+        html.push_str("<li id=\"task-");
+        html.push_str(i.to_string().as_str());
+        html.push_str("\">");
+        html.push_str(task.date.format("%A %-m/%-d/%y ").to_string().as_str());
+        match [task.start_time, task.end_time] {
+            [Some(start), Some(end)] => {
+                html.push_str(start.format("%l:%M%p").to_string().as_str());
+                html.push_str(" -- ");
+                html.push_str(end.format("%l:%M%p").to_string().as_str());
+            }
+            _ => (),
+        }
+        html.push_str("<ul>");
+        if task.tags.contains(&"public".to_string()) {
+            html.push_str("<li><b>Description:</b> ");
+            html.push_str(task.details.as_str());
+            html.push_str("</li>");
+        }
+        for tag in &task.tags {
+            if public_tags.contains_key(&tag.as_str()) {
+                html.push_str("<li>Tagged <b>");
+                html.push_str(tag.as_str());
+                html.push_str(":</b> ");
+                html.push_str(public_tags.get(&tag.as_str()).expect(""));
+                html.push_str("</li>");
+            }
+        }
+        html.push_str("</ul>");
+        html.push_str("</li>");
+    }
+    html.push_str("</ul></body></html>");
     return html;
 }
 
