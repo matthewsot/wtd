@@ -225,9 +225,11 @@ fn tasks_to_html(tasks: &Vec<Task>) -> String {
                 Some(idx) => {
                     if row_idx == 0 || table[(row_idx - 1) as usize][col_idx as usize] != task_idx {
                         let mut rowspan = 0;
-                        for i in rowspan..timespans_per_day {
+                        for i in row_idx..timespans_per_day {
                             if table[i as usize][col_idx as usize] == task_idx {
                                 rowspan += 1;
+                            } else {
+                                break;
                             }
                         }
                         html.push_str("<td class=\"has-task");
