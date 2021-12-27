@@ -298,7 +298,7 @@ fn tasks_to_html(tasks: &Vec<Task>) -> String {
         html.push_str("</ul>");
         html.push_str("</li>");
     }
-    html.push_str("</ul></body></html>");
+    html.push_str("</ul><a href=\"https://github.com/matthewsot/wtd\">src</a></body></html>");
     return html;
 }
 
