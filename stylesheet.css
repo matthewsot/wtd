@@ -4,15 +4,41 @@ table {
 }
 th, td {
     border: 1px solid black;
-    border-collapse: collapse;
     padding: 0;
 }
+    td {
+        border-collapse: collapse;
+    }
 th {
     padding: 3px;
+    background-color: #ccc;
+    /* https://stackoverflow.com/questions/41882616/why-border-is-not-visible-with-position-sticky-when-background-color-exists */
+    background-clip: padding-box;
+}
+    th:after{
+        content:'';
+        position:absolute;
+        left: 0;
+        bottom: 0;
+        width:100%;
+        border-bottom: 1px solid black;
+    }
+tr:first-child {
+    position: sticky;
+    top: -1px;
+    border: 1px solid #000;
+    z-index: 100;
+}
+tr > td:first-child {
+    padding-left: 2px;
+    padding-right: 2px;
+    background-color: #ccc;
 }
 
 .has-task {
     background-color: #aaa;
+    position: relative;
+    background-clip: padding-box;
 }
 .tag-busy {
     background-color: red;
@@ -28,11 +54,18 @@ th {
 .tag-join-me {
     background-color: #2a2;
 }
+.tag-self {
+    background-color: #22aa9d6e;
+}
 td a {
     display: block;
     text-decoration: none;
     color: inherit;
     padding: 3px;
+    position: absolute;
+    top: 0;
+    height: 100%;
+    width: 100%;
 }
 
 li:target {

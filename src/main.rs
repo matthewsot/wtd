@@ -2,7 +2,6 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::path::Path;
 use std::str::FromStr;
-use std::convert::TryInto;
 use std::cmp::Ordering;
 use std::collections::HashSet;
 use std::collections::HashMap;
@@ -132,95 +131,137 @@ fn cmp_tasks(a: &Task, b: &Task) -> Ordering {
     }
 }
 
+fn does_overlap(timespan_start: &NaiveTime, timespan_end: &NaiveTime, task: &Task) -> bool {
+    return match [task.start_time, task.end_time] {
+        [Some(start), Some(end)] => (&start <= timespan_start && timespan_start < &end)
+                                    || (&start < timespan_end && timespan_end < &end),
+        _ => false,
+    }
+}
+
 fn tasks_to_html(tasks: &Vec<Task>) -> String {
     let public_tags = HashMap::from([
         ("busy", "I will be genuinely busy, e.g., a meeting with others."),
         ("rough", "The nature of the event (e.g., a hike) makes it difficult to preduct the exact start/end times."),
         ("tentative", "This event timing is only tentative."),
         ("join-me", "This is an open event; if you're interested in attending with me please reach out!"),
+        ("self", "This is scheduled time for me to complete a specific work or personal task; I can usually reschedule such blocks when requested."),
     ]);
 
-    let mut html = "<html><head><title>Calendar</title><link rel=\"stylesheet\" href=\"stylesheet.css\"></link></head><body>".to_string();
+    let mut html = "<html><head><meta charset=\"UTF-8\"><title>Calendar</title><link rel=\"stylesheet\" href=\"stylesheet.css\"></link></head><body>".to_string();
 
-    let today = Local::now().date().naive_local();
-    let start_of_week = today - Duration::days(today.weekday().num_days_from_monday().try_into().unwrap());
-    let start_of_next_week = today + (Duration::days(7) - Duration::days(today.weekday().num_days_from_monday().try_into().unwrap()));
+    let n_days = 14;
+    let start_period = Local::now().date().naive_local();
+    let end_period = start_period + Duration::days(n_days);
     let mut week_task_ids: Vec<usize> = Vec::new();
     for (i, task) in tasks.iter().enumerate() {
-        if task.date >= start_of_week && task.date < start_of_next_week {
+        if task.date >= start_period && task.date < end_period {
             week_task_ids.push(i);
         }
     }
 
-    html.push_str("<table><tr>");
-    html.push_str("<th>Time</th>");
-    for day_of_week in 0..7 {
+    let min_incr: i64 = 15;
+    let timespans_per_day = (24 * 60 ) / min_incr;
+    let mut table: Vec<Vec<Option<usize>>> = Vec::new();
+    let mut table_tags: Vec<Vec<Vec<&String>>> = Vec::new();
+    for i in 0..timespans_per_day {
+        table.push(Vec::new());
+        table_tags.push(Vec::new());
+        for _ in 0..n_days {
+            table[i as usize].push(None);
+            table_tags[i as usize].push(vec![]);
+        }
+    }
+
+    html.push_str("<table>");
+    html.push_str("<tr><th>Time</th>");
+    for offset in 0..n_days {
         html.push_str("<th>");
-        html.push_str(&(start_of_week + Duration::days(day_of_week)).format("%A %-m/%-d/%y").to_string());
+        html.push_str(&(start_period + Duration::days(offset)).format("%a %-m/%-d/%y").to_string());
         html.push_str("</th>");
     }
     html.push_str("</tr>");
 
     week_task_ids.sort_by(|a, b| cmp_tasks(&tasks[*a], &tasks[*b]));
 
-    let min_incr = 15;
-    let mut time = NaiveTime::from_hms(0, 0, 0);
-    loop {
-        html.push_str("<tr><td>");
-        html.push_str(&time.format("%l:%M %p").to_string());
-        html.push_str("</td>");
-        for day_of_week in 0..7 {
-            // TODO: Use a smarter data structure for this.
-            let mut cell_tasks = Vec::new();
-            let mut cell_public_tags = HashSet::new();
-            for i in week_task_ids.iter() {
-                let task = &tasks[*i];
-                let task_day = task.date.weekday().num_days_from_monday();
-                if task_day > day_of_week {
-                    break;
-                } else if task_day < day_of_week {
-                    continue;
-                }
-                match [task.start_time, task.end_time] {
-                    [Some(start), Some(end)] => {
-                        if time >= start && time < end {
-                            cell_tasks.push(i);
-                            for tag in &task.tags {
-                                if public_tags.contains_key(&tag.as_str()) {
-                                    cell_public_tags.insert(tag.to_string());
-                                }
-                            }
-                        }
-                    }
-                    _ => continue
+    for i in 0..timespans_per_day {
+        let timespan_start = NaiveTime::from_hms(0, 0, 0) + Duration::minutes(i * min_incr);
+        let timespan_end = NaiveTime::from_hms(0, 0, 0) + Duration::minutes((i + 1) * min_incr);
+        for offset in 0..n_days {
+            // (1) Find all task ids that intersect this timespan on this day.
+            let this_date = start_period + Duration::days(offset);
+            let on_this_date: Vec<usize>
+                = week_task_ids.iter().map(|&idx| idx)
+                  .filter(|&idx| tasks[idx].date == this_date).collect();
+            let intersecting: Vec<usize>
+                = on_this_date.iter().map(|&idx| idx)
+                  .filter(|&idx| does_overlap(&timespan_start, &timespan_end, &tasks[idx])).collect();
+            // (2) Find the event ending first and place it in the table.
+            table[i as usize][offset as usize] = intersecting.iter()
+                .map(|&idx| idx)
+                .min_by_key(|&idx| tasks[idx].end_time.expect("Should have an end time at this point..."));
+            // (3) Collect all the (public) tags used.
+            let mut span_public_tags: HashSet<&String> = HashSet::new();
+            for idx in intersecting {
+                span_public_tags.extend(tasks[idx].tags.iter().map(|t| t));
+            }
+            for tag in span_public_tags {
+                if public_tags.contains_key(tag.as_str()) {
+                    table_tags[i as usize][offset as usize].push(tag);
                 }
             }
-            if cell_tasks.len() > 0 {
-                html.push_str("<td class=\"has-task");
-                for tag in &cell_public_tags {
-                    html.push_str(" tag-");
-                    html.push_str(tag.as_str());
-                }
-                html.push_str("\">");
-                html.push_str("<a href=\"#");
-                html.push_str("task-");
-                html.push_str(cell_tasks.first().expect("").to_string().as_str());
-                html.push_str("\">has-task");
-                for tag in &cell_public_tags {
-                    html.push_str(", ");
-                    html.push_str(tag.as_str());
-                }
-                html.push_str("</a></td>");
-            } else {
-                html.push_str("<td></td>");
+            table_tags[i as usize][offset as usize].sort();
+        }
+    }
+    for row_idx in 0..timespans_per_day {
+        let timespan_start = NaiveTime::from_hms(0, 0, 0) + Duration::minutes(row_idx * min_incr);
+        html.push_str("<tr><td><b>");
+        html.push_str(&timespan_start.format("%l:%M %p").to_string());
+        html.push_str("</b></td>");
+        for col_idx in 0..n_days {
+            let task_idx = table[row_idx as usize][col_idx as usize];
+            let all_tags = &table_tags[row_idx as usize][col_idx as usize];
+            match task_idx {
+                Some(idx) => {
+                    if row_idx == 0 || table[(row_idx - 1) as usize][col_idx as usize] != task_idx {
+                        let mut rowspan = 0;
+                        for i in rowspan..timespans_per_day {
+                            if table[i as usize][col_idx as usize] == task_idx {
+                                rowspan += 1;
+                            }
+                        }
+                        html.push_str("<td class=\"has-task");
+                        for tag in all_tags {
+                            html.push_str(" tag-");
+                            html.push_str(tag.as_str());
+                        }
+                        html.push_str("\" rowspan=\"");
+                        html.push_str(rowspan.to_string().as_str());
+                        html.push_str("\">");
+                        html.push_str("<a href=\"#");
+                        html.push_str("task-");
+                        html.push_str(idx.to_string().as_str());
+                        html.push_str("\">");
+                        if all_tags.len() == 0 {
+                            html.push_str("has-task");
+                        }
+                        let mut any_yet = false;
+                        for tag in all_tags {
+                            if any_yet {
+                                html.push_str(", ");
+                            }
+                            html.push_str(tag.as_str());
+                            any_yet = true;
+                        }
+                        html.push_str("</a></td>");
+                    }
+                },
+                _ => {
+                    html.push_str("<td></td>");
+                },
             }
         }
         html.push_str("</tr>");
-
-        time = time + Duration::minutes(min_incr);
-        if time == NaiveTime::from_hms(0, 0, 0) {
-            break;
-        }
     }
     html.push_str("</table><ul>");
     for i in week_task_ids.iter() {
@@ -228,7 +269,7 @@ fn tasks_to_html(tasks: &Vec<Task>) -> String {
         html.push_str("<li id=\"task-");
         html.push_str(i.to_string().as_str());
         html.push_str("\">");
-        html.push_str(task.date.format("%A %-m/%-d/%y ").to_string().as_str());
+        html.push_str(task.date.format("%a %-m/%-d/%y ").to_string().as_str());
         match [task.start_time, task.end_time] {
             [Some(start), Some(end)] => {
                 html.push_str(start.format("%l:%M%p").to_string().as_str());
