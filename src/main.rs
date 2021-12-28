@@ -139,7 +139,12 @@ fn does_overlap(timespan_start: &NaiveTime, timespan_end: &NaiveTime, task: &Tas
     }
 }
 
-fn tasks_to_html(tasks: &Vec<Task>) -> String {
+enum CalendarPrivacy {
+    Public,
+    Private,
+}
+
+fn tasks_to_html(tasks: &Vec<Task>, privacy: CalendarPrivacy) -> String {
     let public_tags = HashMap::from([
         ("busy", "I will be genuinely busy, e.g., a meeting with others."),
         ("rough", "The nature of the event (e.g., a hike) makes it difficult to preduct the exact start/end times."),
@@ -244,16 +249,27 @@ fn tasks_to_html(tasks: &Vec<Task>) -> String {
                         html.push_str("task-");
                         html.push_str(idx.to_string().as_str());
                         html.push_str("\">");
-                        if all_tags.len() == 0 {
-                            html.push_str("has-task");
-                        }
-                        let mut any_yet = false;
-                        for tag in all_tags {
-                            if any_yet {
-                                html.push_str(", ");
-                            }
-                            html.push_str(tag.as_str());
-                            any_yet = true;
+                        match privacy {
+                            CalendarPrivacy::Public => {
+                                let mut any_yet = false;
+                                for tag in all_tags {
+                                    if any_yet { html.push_str(", "); }
+                                    html.push_str(tag.as_str());
+                                    any_yet = true;
+                                }
+                                if tasks[idx].tags.contains(&&"public".to_string()) {
+                                    if any_yet { html.push_str(": \""); }
+                                    html.push_str(&tasks[idx].details.as_str());
+                                    html.push_str("\"");
+                                    any_yet = true;
+                                }
+                                if !any_yet {
+                                    html.push_str("has-task");
+                                }
+                            },
+                            CalendarPrivacy::Private => {
+                                html.push_str(&tasks[idx].details.as_str());
+                            },
                         }
                         html.push_str("</a></td>");
                     }
@@ -268,6 +284,12 @@ fn tasks_to_html(tasks: &Vec<Task>) -> String {
     html.push_str("</table><ul>");
     for i in week_task_ids.iter() {
         let task = &tasks[*i];
+        let task_public_tags: Vec<&String>
+            = task.tags.iter().filter(|&t| t == "public" || public_tags.contains_key(t.as_str())).collect();
+        match (&privacy, &task.start_time, &task_public_tags[..]) {
+            (CalendarPrivacy::Public, None, []) => continue,
+            _ => (),
+        }
         html.push_str("<li id=\"task-");
         html.push_str(i.to_string().as_str());
         html.push_str("\">");
@@ -281,17 +303,33 @@ fn tasks_to_html(tasks: &Vec<Task>) -> String {
             _ => (),
         }
         html.push_str("<ul>");
-        if task.tags.contains(&"public".to_string()) {
-            html.push_str("<li><b>Description:</b> ");
-            html.push_str(task.details.as_str());
-            html.push_str("</li>");
-        }
-        for tag in &task.tags {
-            if public_tags.contains_key(&tag.as_str()) {
-                html.push_str("<li>Tagged <b>");
-                html.push_str(tag.as_str());
-                html.push_str(":</b> ");
-                html.push_str(public_tags.get(&tag.as_str()).expect(""));
+        match privacy {
+            CalendarPrivacy::Public => {
+                if task.tags.contains(&"public".to_string()) {
+                    html.push_str("<li><b>Description:</b> ");
+                    html.push_str(task.details.as_str());
+                    html.push_str("</li>");
+                }
+                for tag in &task.tags {
+                    if public_tags.contains_key(&tag.as_str()) {
+                        html.push_str("<li>Tagged <b>");
+                        html.push_str(tag.as_str());
+                        html.push_str(":</b> ");
+                        html.push_str(public_tags.get(&tag.as_str()).expect(""));
+                        html.push_str("</li>");
+                    }
+                }
+            },
+            CalendarPrivacy::Private => {
+                html.push_str("<li><b>Description:</b> ");
+                html.push_str(task.details.as_str());
+                html.push_str("</li><li>Tagged: ");
+                for (i, tag) in task.tags.iter().enumerate() {
+                    if i > 0 { html.push_str(", "); }
+                    html.push_str("<b>");
+                    html.push_str(tag.as_str());
+                    html.push_str("</b>");
+                }
                 html.push_str("</li>");
             }
         }
@@ -359,7 +397,13 @@ fn main() {
                     }
                 }
             }
-            print!("{}\n", tasks_to_html(&tasks));
+            let public_html = tasks_to_html(&tasks, CalendarPrivacy::Public);
+            let private_html = tasks_to_html(&tasks, CalendarPrivacy::Private);
+            // https://riptutorial.com/rust/example/4276/write-in-a-file
+            let mut public = File::create(Path::new("public.html")).unwrap();
+            writeln!(&mut public, "{}", public_html).unwrap();
+            let mut private = File::create(Path::new("private.html")).unwrap();
+            writeln!(&mut private, "{}", private_html).unwrap();
         }
     }
 }

@@ -30,10 +30,11 @@ which case they are printed out to the public calendar along with a short
 description. Events on the public calendar can also be styled according to
 these `public_tags`, see `calendar_style.css`.
 
-To generate the public calendar, run:
+To generate the HTML calendars, run:
 ```
-$ cargo run > calendar.html
+$ cargo run
 ```
+You should now see `public.html` and `private.html` in the current directory.
 
 The calendar does not require Javascript and should work very well in, e.g.,
 `w3m`.
