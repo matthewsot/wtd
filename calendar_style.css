@@ -32,33 +32,35 @@ tr > td:first-child {
     background-color: #ccc;
 }
 
-.has-task {
+td.has-task {
+    padding: 3px;
     background-color: #aaa;
     position: relative;
     background-clip: padding-box;
 }
-.tag-busy {
-    background-color: red;
-}
-.tag-tentative {
-    /* https://www.quackit.com/css/codes/patterns/css_background_stripes.cfm */
-    background-image: repeating-linear-gradient(165deg, #ccc, #ccc 10px, #dbdbdb 10px, #dbdbdb 20px);
-}
-.tag-rough {
-    border-style: dashed;
-    border-width: 2px;
-}
-.tag-join-me {
-    background-color: #2a2;
-}
-.tag-self {
-    background-color: #22aa9d6e;
-}
+    td.tag-busy {
+        background-color: red;
+    }
+    td.tag-tentative {
+        /* https://www.quackit.com/css/codes/patterns/css_background_stripes.cfm */
+        background-image: repeating-linear-gradient(165deg, #ccc, #ccc 10px, #dbdbdb 10px, #dbdbdb 20px);
+    }
+    td.tag-rough {
+        border-style: dashed;
+        border-width: 2px;
+    }
+    td.tag-join-me {
+        background-color: #2a2;
+    }
+    td.tag-self {
+        background-color: #22aa9d6e;
+    }
 td a {
     display: block;
     text-decoration: none;
     color: inherit;
-    padding: 3px;
+    padding: 0;
+    overflow-y: auto;
     position: absolute;
     top: 0;
     height: 100%;
