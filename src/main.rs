@@ -272,10 +272,9 @@ fn tasks_to_html(tasks: &Vec<Task>, privacy: CalendarPrivacy) -> String {
     html.push_str("</table><ul>");
     for i in week_task_ids.iter() {
         let task = &tasks[*i];
-        let task_public_tags: Vec<&String>
-            = task.tags.iter().filter(|&t| t == "public" || public_tags.contains_key(t.as_str())).collect();
-        match (&privacy, &task.start_time, &task_public_tags[..]) {
-            (CalendarPrivacy::Public, None, []) => continue,
+        let is_public = task.tags.contains(&"public".to_string());
+        match (&privacy, &task.start_time, &is_public) {
+            (CalendarPrivacy::Public, None, false) => continue,
             _ => (),
         }
         html.push_str("<li id=\"task-");
