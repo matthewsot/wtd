@@ -3,7 +3,6 @@ use std::io::prelude::*;
 use std::path::Path;
 use std::str::FromStr;
 use std::cmp::Ordering;
-use std::collections::HashSet;
 use std::collections::HashMap;
 use chrono::{Datelike, NaiveDate, NaiveTime, Weekday, Duration, Timelike, Local};
 // use chrono::format::ParseError;
@@ -168,13 +167,10 @@ fn tasks_to_html(tasks: &Vec<Task>, privacy: CalendarPrivacy) -> String {
     let min_incr: i64 = 15;
     let timespans_per_day = (24 * 60 ) / min_incr;
     let mut table: Vec<Vec<Option<usize>>> = Vec::new();
-    let mut table_tags: Vec<Vec<Vec<&String>>> = Vec::new();
     for i in 0..timespans_per_day {
         table.push(Vec::new());
-        table_tags.push(Vec::new());
         for _ in 0..n_days {
             table[i as usize].push(None);
-            table_tags[i as usize].push(vec![]);
         }
     }
 
@@ -205,17 +201,6 @@ fn tasks_to_html(tasks: &Vec<Task>, privacy: CalendarPrivacy) -> String {
             table[i as usize][offset as usize] = intersecting.iter()
                 .map(|&idx| idx)
                 .min_by_key(|&idx| tasks[idx].end_time.expect("Should have an end time at this point..."));
-            // (3) Collect all the (public) tags used.
-            let mut span_public_tags: HashSet<&String> = HashSet::new();
-            for idx in intersecting {
-                span_public_tags.extend(tasks[idx].tags.iter().map(|t| t));
-            }
-            for tag in span_public_tags {
-                if public_tags.contains_key(tag.as_str()) {
-                    table_tags[i as usize][offset as usize].push(tag);
-                }
-            }
-            table_tags[i as usize][offset as usize].sort();
         }
     }
     for row_idx in 0..timespans_per_day {
@@ -225,7 +210,6 @@ fn tasks_to_html(tasks: &Vec<Task>, privacy: CalendarPrivacy) -> String {
         html.push_str("</b></td>");
         for col_idx in 0..n_days {
             let task_idx = table[row_idx as usize][col_idx as usize];
-            let all_tags = &table_tags[row_idx as usize][col_idx as usize];
             match task_idx {
                 Some(idx) => {
                     if row_idx == 0 || table[(row_idx - 1) as usize][col_idx as usize] != task_idx {
@@ -238,9 +222,11 @@ fn tasks_to_html(tasks: &Vec<Task>, privacy: CalendarPrivacy) -> String {
                             }
                         }
                         html.push_str("<td class=\"has-task");
-                        for tag in all_tags {
-                            html.push_str(" tag-");
-                            html.push_str(tag.as_str());
+                        for tag in &tasks[idx].tags {
+                            if public_tags.contains_key(tag.as_str()) {
+                                html.push_str(" tag-");
+                                html.push_str(tag.as_str());
+                            }
                         }
                         html.push_str("\" rowspan=\"");
                         html.push_str(rowspan.to_string().as_str());
@@ -252,10 +238,12 @@ fn tasks_to_html(tasks: &Vec<Task>, privacy: CalendarPrivacy) -> String {
                         match privacy {
                             CalendarPrivacy::Public => {
                                 let mut any_yet = false;
-                                for tag in all_tags {
-                                    if any_yet { html.push_str(", "); }
-                                    html.push_str(tag.as_str());
-                                    any_yet = true;
+                                for tag in &tasks[idx].tags {
+                                    if public_tags.contains_key(tag.as_str()) {
+                                        if any_yet { html.push_str(", "); }
+                                        html.push_str(tag.as_str());
+                                        any_yet = true;
+                                    }
                                 }
                                 if tasks[idx].tags.contains(&&"public".to_string()) {
                                     if any_yet { html.push_str(": \""); }
